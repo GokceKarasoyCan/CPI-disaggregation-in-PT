@@ -1,0 +1,526 @@
+\documentclass[9pt]{beamer}
+\usetheme{Madrid}
+    \usepackage[utf8]{inputenc} % Aceptar tildación española
+    %\usepackage[spanish]{babel} % titulos en español
+    \usepackage{graphicx}
+    \usepackage{caption}
+    \usepackage{amsmath} % for 'bmatrix' environment
+    \usepackage[document]{ragged2e}
+    \useoutertheme{miniframes} % Alternatively: miniframes, infolines, split
+    
+\useinnertheme{circles}
+\definecolor{UBCblue}{rgb}{0.1, 0.3, 0.45} % UBC Blue (primary)
+\usecolortheme[named=UBCblue]{structure}
+
+
+\title{CPI disaggregation in Post Trans}
+% A subtitle is optional and this may be deleted
+%\subtitle{Case of Peru}
+\subtitle{(Work in progress)}
+\author{Carlos Gonzales}
+% - Use the \inst{?} command only if the authors have different
+%   affiliation.
+
+%\institute[MEF] % (optional, but mostly needed)
+%{ \inst{1}% MEF}
+
+
+% - Use the \inst command only if there are several affiliations.
+% - Keep it simple, no one is interested in your street address
+
+\date{2026}
+% - Either use conference name or its abbreviation.
+% - Not really informative to the audience, more for people (including
+%   yourself) who are reading the slides online
+
+%\subject{Theoretical Computer Science}
+% This is only inserted into the PDF information catalog. Can be left
+% out. 
+
+% If you have a file called "university-logo-filename.xxx", where xxx
+% is a graphic format that can be processed by latex or pdflatex,
+% resp., then you can add a logo as follows:
+
+% \pgfdeclareimage[height=0.5cm]{university-logo}{university-logo-filename}
+% \logo{\pgfuseimage{university-logo}}
+
+% Delete this, if you do not want the table of contents to pop up at
+% the beginning of each subsection:
+\AtBeginSubsection[]
+{
+  \begin{frame}<beamer>{Content}
+    \tableofcontents[currentsection,currentsubsection]
+  \end{frame}
+}
+
+% Let's get started
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Content}
+  \tableofcontents
+\end{frame}
+
+\section{Introduction}
+\subsection{}
+
+
+\begin{frame}{Introduction}{}
+
+\begin{itemize}
+    \item{xxxx}
+ \end{itemize}
+
+ \end{frame}
+ 
+ \section{Literature I}
+
+ \begin{frame}{Literature}
+ \begin{itemize}
+    \item {xxxxxx}
+\end{itemize}
+\begin{itemize}
+    \item {xxxxxxx}
+\end{itemize}
+\begin{itemize}
+    \item {xxxxx}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Literature II}
+ \begin{itemize}
+    \item {xxxxxx}
+\end{itemize}
+
+\begin{itemize}
+    \item {xxxx}
+\end{itemize}
+
+\begin{itemize}
+    \item {xxxxxx}
+\end{itemize}
+
+\begin{itemize}
+    \item {xxxxx}
+\end{itemize}
+
+\begin{itemize}
+    \item {xxxxx}
+\end{itemize}
+
+\end{frame}
+
+\section{Methodology}
+
+\begin{frame}{Methodology}
+
+ \begin{itemize}
+\item{xxxxxx}
+ \end{itemize}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Revisiting economic shocks in labor market}
+
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{g23.JPG}
+  \captionof{figure}{Positive demand shock}\label{fig:1}
+\end{minipage}%
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{d2}
+  \captionof{figure}{Positive supply shock}\label{fig:2}
+\end{minipage}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Revisiting economic shocks in labor market}
+
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{d3.JPG}
+  \captionof{figure}{Negative demand shock}\label{fig:3}
+\end{minipage}%
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{d4}
+  \captionof{figure}{Negative supply shock}\label{fig:4}
+\end{minipage}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Model Specification}
+ \begin{itemize}
+\item{Considering that Post Trans include simple semi-structural equations, I am proposing the following OLS/ECM models}:
+
+%\begin{equation} OLS:  
+ %\Delta Food_{t} = b_1 \Delta Inflationexpectation_{t} + b_2 %\Delta Sterling_{t-3}  + b_3 \Delta Import prices_{t-2} + %b_4 \Delta Import prices_{t-3}
+ %\end{equation}
+
+ \begin{equation} ECM:  
+ \Delta Food_{t} = b_1 \Delta Inflexpect_{t} + b_2 \Delta Sterling_{t-1}  + b_3 \Delta Import prices_{t-2} + b_4 ECT_{t-1}
+ \end{equation}
+ %where: 
+ %\begin{equation}
+ %ECT_{t} = Ln(Food)_{t} - (a_1 Ln(Inflexpect_{t}) + a_2 Ln(sterling_{t}))
+ % \end{equation}
+ 
+ \begin{equation}
+ \Delta Core goods_{t} = b_1 \Delta Inflationexpectation_{t} + b_2 \Delta Sterling_{t-3}  + b_3 \Delta Import prices_{t-2} + b_4 \Delta Import prices_{t-3} )
+ \end{equation}
+
+\begin{equation}
+ \Delta Services_{t} = b_1 \Delta Inflationexpectation_{t} + b_2 \Delta Sterling_{t-3}  + b_3 \Delta Import prices_{t-2} + b_4 \Delta Import prices_{t-3} )
+ \end{equation}
+\end{itemize}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Food inflation model}
+\begin{itemize}
+\item{Food inflation model is an ECM including long run and short run dynamics}
+\item{Modelling long run equation to get error correction term (ECT):}
+\end{itemize}
+
+\begin{equation}
+  Food_{t} = c + a_1 Importprice_{t} + a_2 Sterling_{t} + u_{t}
+\end{equation}
+
+\begin{table}[ht]
+\centering
+\caption{Long Run Model}
+
+\begin{tabular}{lccc}
+
+%\hline
+%\hline \multicolumn{2}{c}{\textbf{Long-Run model }} \\ 
+
+\hline
+\multicolumn{1}{c}{\textbf{Variable}} & \multicolumn{1}{c}{\textbf{Coefficient}} \\ 
+
+\hline 
+Intercept & -14.87(***) \\
+%Inflation expectation_{t} & 0.27( * )  \\
+Import price_{t} & 3.04(***) \\
+Sterling_{t} & 1.41(***) \\
+
+\hline
+\multicolumn{4}{p{7cm}}{\small \textbf{\textsc{Note:}  (***) significant at 100 per cent. Adj R-squared: 0.875 }}
+\end{tabular}
+\end{table}
+
+\begin{equation}
+ECT_{t} = u_{t} = Food_{t} - Food^{l}_{t}
+\end{equation}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Food inflation model }
+\begin{itemize}
+\item{Final food inflation model: short run + long term dynamics:}
+\end{itemize}
+\begin{equation} 
+ \Delta Food_{t} = c+ b_1 \Delta Inflexpect_{t} + b_2 \Delta Sterling_{t-1}  + b_3 \Delta Import prices_{t-2} + b_4 ECT_{t-1}
+ \end{equation}
+
+%\begin{equation}
+ %ECT_{t} = Food_{t} - a_1 Inflexpect_{t} + a_2 sterling_{t}
+%\end{equation}
+ 
+\begin{table}[ht]
+\centering
+\caption{Food inflation model }
+
+\begin{tabular}{lccc}
+\hline
+\hline \multicolumn{2}{c}{\textbf{ECM }} \\ 
+
+\hline
+\multicolumn{1}{c}{\textbf{Variable}} & \multicolumn{1}{c}{\textbf{Coefficient}} \\ 
+
+\hline 
+Intercept & 0.48(***) \\
+Inflation expectation_{t} & 0.27( * )  \\
+Sterling_{t-1} & 0.10( * ) \\
+Import price_{t-2} & 0.08( . ) \\
+ECT_{t-1} & -2.36( * ) \\
+Dummy_{2008Q2} & 2.39( * ) \\
+%Dummy2023Q2 & 2.4(**) \\
+\hline
+\multicolumn{4}{p{7cm}}{\small \textbf{\textsc{Note:}  (***) significant at 100 per cent,(**) significant at 99 per cent,(*) significant at 95 per cent, (.) significant at 90 per cent. Adj R-squared: 0.28 }}
+\end{tabular}
+\end{table}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\section{Results}
+
+\begin{frame}{Food inflation: Actual vs forecas tdata}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.7\linewidth]{r1.JPG}
+  \captionof{figure}{Decomposition of employment by demand and supply shocks during COVID-19}\label{fig:15}
+\end{figure}%
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Econometric model}
+ \begin{itemize}
+\item{So, as we can see the impact of supply and demand shock on equilibrium depends on the elasticises, as we can show}:
+\end{itemize}
+
+\begin{equation}
+    \Delta h_{t}^{l} = (\frac{1}{1-(\frac{\alpha^{l}}{\beta^{l}})^{-1}})\epsilon_{d,t}^{l}+ (\frac{1}{1-\frac{\alpha^{l}}{\beta^{l}}})\epsilon_{s,t}^{l}
+\end{equation}
+
+\begin{equation}
+    \Delta w_{t}^{l} = (\frac{\frac{1}{\beta^{l}}}{\frac{\alpha^{l}{\beta^{l}}}-1}-1)\epsilon_{d,t}^{l}+(\frac{\frac{1}{\beta^{l}}}{1-\frac{\alpha^{l}}{\beta^{l}}})\epsilon_{s,t}^{l}
+\end{equation}
+
+\begin{itemize}
+\item{Hence, if $\beta^{l} < 0$ and $\alpha^{l} > 0$:}
+\end{itemize}
+
+\begin{center}
+$\frac{\delta \Delta h_{t}^{l}}{\epsilon_{d,t}^{l}} > 0$ and $\frac{\delta \Delta w_{t}^{l}}{\epsilon_{d,t}^{l}} > 0$
+\end{center}
+\begin{center}
+$\frac{\delta \Delta h_{t}^{l}}{\epsilon_{s,t}^{l}} > 0$ and $\frac{\delta \Delta w_{t}^{l}}{\epsilon_{s,t}^{l}} < 0$  
+\end{center}
+
+\end{frame}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Bayesian specification}
+
+\begin{itemize}
+\item{The reduced-form vector autoregression (VAR) associated with the SVAR model 2:}
+\end{itemize}
+
+\begin{equation}
+ y_{t}^{l} = \Pi_{0}^{l}+\Pi_{0}^{l}(L) y_{t-1}^{l}+\nu_{t}^{l}
+\end{equation}
+
+\begin{equation*}
+\Pi_{0}^{l} = (A^{l})^{-1}B_{0}^{l} 
+\end{equation*}
+
+\begin{equation*}
+\Pi^{l}(L) = (A^{l})^{-1}B^{l}(L) 
+\end{equation*}
+
+\begin{equation*}
+\nu_{t}^{l} = (A^{l})^{-1}\epsilon_{0}^{l} 
+\end{equation*}
+
+\begin{equation*}
+E[\nu_{t}^{l}(\nu_{t}^{l})^{'}]=(A^{l})^{-1}D((A^{l})^{-1})^{'}
+\end{equation*}
+
+\begin{itemize}
+    \item So, prior beliefs about the parameters are represented by a joint density $ p(A,D,B). $
+\end{itemize}
+
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Bayesian specification}
+\begin{itemize}
+    \item {Baumeister and Hamilton (2015) developed an algorithm that estimates the parameters
+of an SVAR model using Bayesian methods (SBVAR). Their algorithm applies a
+random-walk Metropolis-Hastings algorithm to seek elasticity values for A, considering prior
+information, that diagonalizes the covariance matrix of the reduced form errors.}
+\end{itemize}
+\begin{itemize}
+    \item {Baumeister and Hamilton (2015) prove that the posterior can be written as:}
+\end{itemize}
+
+\begin{equation}
+p(A,D,B | Y_{T}) = p(A|Y_{T})p(D|A,Y_{T})p(B|A,D,Y_{T})
+\end{equation}
+
+\begin{itemize}
+    \item {Where $ p(B) = A\Pi$ is the coefficients set from Bayesian VAR Minnesota priors of the reduced form.}
+\end{itemize}
+
+\begin{itemize}
+    \item {Where the elements of  $ D $  and the conditional posterior distribution  $p(D| A, Y_{t} )$ are gamma distributed.}
+\end{itemize}
+
+\begin{itemize}
+    \item {Finally, $p(A|Y_{T})$ is estimated by a random-walk Metropolis-Hastings
+algorithm.}
+\end{itemize}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}{Methodology intuition}
+
+ \begin{itemize}
+
+\item {If it is observed that employment and wages (prices and quantities) move in the same direction, it is more likely that these movements are caused by a demand shock.
+On the other hand, if we observe that employment and wages move in opposite directions, it is assigned to a supply shock.}
+
+\item {Uhlig (2017) explain the basic required assumptions for identifying demand and supply shocks. Actually, It may be other shocks that impact to demand and supply. Without loss of generality, the approach of Baumeister y Hamilton (2015), and it is used by Brinca, Duarte and Faria e Castro (2020), those other shocks do not affect demand and supply in a systematic way.}
+
+ \end{itemize}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Setting Priors to Peru}
+
+
+\begin{table}[ht]
+\centering
+\caption{Literature}
+\begin{tabular}{lccc}
+\hline
+\hline \multicolumn{4}{c}{\textbf{Local}} \\ \hline
+\multicolumn{1}{c}{\textbf{Author}} & \multicolumn{1}{c}{\textbf{Data Source}} & \textbf{Elasticity} & \textbf{Frequency} \\ \hline
+Cespedes (2012) and Rendon & EPE & 0.380 & Monthly \\
+Cespedes and Reyna  (2016) & ENAHO & 0.257 & Quarterly \\ \\
+\hline \hline \multicolumn{4}{c}{\textbf{International}} \\ \hline
+\multicolumn{1}{c}{\textbf{Author}} & \multicolumn{1}{c}{\textbf{Data Source}} & \textbf{Elasticity} & \textbf{Frequency} \\ \hline
+Smets, F. and R. Wouters (2007) & US Dep. of Commerce & 0.22 & Quarterly  \\
+Chetty (2011) & USA & 0.26 & Quarterly \\
+
+\hline
+\multicolumn{4}{p{7cm}}{\small \textbf{\textsc{Note:} Own elaboration}}
+\end{tabular}
+\end{table}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Data}
+
+\begin{frame}{Data}
+
+\begin{itemize}
+    \item {Estimations are made with the annual growth rate of i) Hours of work per week and ii) Average real income obtained from the Permanent Employment Survey of Lima.}
+\end{itemize}
+
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{c1.JPG}
+  \captionof{figure}{Annual real of hours of weekly work}\label{fig:7}
+\end{minipage}%
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{c2.JPG}
+  \captionof{figure}{Annual real change of average income}\label{fig:8}
+\end{minipage}
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Results}
+
+\begin{frame}{Aggregate results}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.7\linewidth]{r1.JPG}
+  \captionof{figure}{Decomposition of employment by demand and supply shocks during COVID-19}\label{fig:15}
+\end{figure}%
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Results}
+
+\begin{frame}{Aggregate results}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.7\linewidth]{r1.JPG}
+  \captionof{figure}{Decomposition of employment by demand and supply shocks during COVID-19}\label{fig:15}
+\end{figure}%
+
+\end{frame}%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Historical Aggregate results}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\linewidth]{r3.JPG}
+  \captionof{figure}{Decomposition of employment by demand and supply shocks between 2001 - 2019}\label{fig:155}
+\end{figure}%
+
+\end{frame}
+
+%\begin{frame}{Results by sector}
+
+%\begin{figure}
+%  \centering
+%  \includegraphics[width=1\linewidth]{r2.JPG}
+%  \captionof{figure}{Descomposition of employment by demand and supply shocks during COVID-19 by %sectors}\label{fig:9}
+%\end{figure}%
+
+%\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}{Posterior and Prior Distribution of Elasticity's Plots}
+
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{demandprior.JPG}
+  \captionof{figure}{Wage Elasticity of Labour Demand}\label{fig:10}
+\end{minipage}%
+\begin{minipage}[c]{.5\textwidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{Supplyprior2.JPG}
+  \captionof{figure}{Wage Elasticity of Labour Supply}\label{fig:11}
+\end{minipage}
+
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frame}{Historical Decomposition}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.9\linewidth]{Contri.JPG}
+  \captionof{figure}{Decomposition of employment by demand and supply shocks}\label{fig:12}
+\end{figure}%
+
+\end{frame}
+
+
+\section{Bibliography}
+\begin{frame}{Bibliography}
+    
+\begin{thebibliography}{10}
+
+\bibitem{1}
+    \newblock {Christiane Baumeister y James D. Hamilton, 2015. "Sign Restrictions, Structural Vector Autoregressions, and Useful Prior Information," Econometrica, Econometric Society, vol. 83(5), pages 1963-1999, 09.}
+
+\bibitem{1}
+    \newblock {Pedro Brinca, Joao B. Duarte y Miguel Faria-e-Castro, 2020. "Measuring Sectoral Supply and Demand Shocks during COVID-19," Working Papers 2020-011, Federal Reserve Bank of St. Louis, revised Jul 2020.}
+  
+\bibitem{1}
+    \newblock {R PACKAGE BHSBVAR, Paul Richardson, 2020}
+
+\bibitem{1}
+    \newblock {Debora Reyna y Nikita Céspedes, 2016. "La oferta laboral en Perú," Working Papers 2016-84, Peruvian Economic Association.}
+    
+\bibitem{1}
+    \newblock {Céspedes, Nikita y Rendón, Silvio, 2012. "La elasticidad de oferta laboral de Frisch en economías con alta movilidad laboral," Working Papers 2012-017, Banco Central de Reserva del Perú.}
+    
+  \end{thebibliography}
+\end{frame}
+
+\end{document}
