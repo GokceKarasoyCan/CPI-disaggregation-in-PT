@@ -1239,17 +1239,21 @@ for (i in 115:136){
 df_outturn = dplyr::bind_rows(df_outturn)
 
 df_outturn <- df_outturn %>%
-  mutate(value = food_at_qoq,
+  mutate(value = core_gds_qoq,
          frequency = "Q",
          forecast_horizon = (date - vintage_date)*4,
-         variable = "Food inflation",
+         variable = "Core goods inflation",
          date = as.character(date),
          vintage_date = as.character(vintage_date),
          .keep = "none")
 
 # saving data in parquet format
 library(arrow)
-write_parquet(df_outturn, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/outturn_data.parquet")
-write_parquet(forecast_data, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/forecast_data.parquet")
+
+# Ensure local data directory exists
+dir.create("C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data", recursive = TRUE, showWarnings = FALSE)
+write_parquet(df_outturn, "C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data/outturn_datacg.parquet")
+write_parquet(forecast_data, "C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data/forecast_datacg.parquet")
+
 
 

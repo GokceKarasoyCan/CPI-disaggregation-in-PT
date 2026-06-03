@@ -101,7 +101,9 @@ df_cpi_tbl <-
   mutate(D_2009Q2 = ifelse(date >= as.Date("2009-06-30") & date <= as.Date("2009-06-30"), 1, 0)) %>%
   mutate(D_COVID_2020 = ifelse(date >= as.Date("2020-06-30") & date <= as.Date("2020-06-30"), 1, 0)) %>%
   mutate(D_2021Q2 = ifelse(date >= as.Date("2021-06-30") & date <= as.Date("2021-09-30"), 1, 0)) %>%
-  mutate(D_2023Q3 = ifelse(date >= as.Date("2023-09-30") & date <= as.Date("2023-09-30"), 1, 0))
+  mutate(D_COVID_2021= ifelse(date >= as.Date("2021-06-30") & date <= as.Date("2021-09-30"), 1, 0)) %>%
+  mutate(D_2023Q3 = ifelse(date >= as.Date("2023-09-30") & date <= as.Date("2023-09-30"), 1, 0)) %>%
+mutate(D_ENERGY_2023 = ifelse(date >= as.Date("2023-09-30") & date <= as.Date("2023-09-30"), 1, 0)) 
 
 
 #===== MODEL ESTIMATION =====
@@ -125,7 +127,7 @@ full_data <-
                 energy_qoq, e_L1, e_L2, e_L3,e_L4,
                 pmdef_qoq, pmdef_L1 , pmdef_L2 , pmdef_L3 , pmdef_L4, 
                 ois_rate, or_L1, or_L2, bank_rate, wage_qoq, wage_L1,
-                D_2008Q4, D_2009Q2,D_SHOCK_1992,D_COVID_2020,D_2021Q2,D_2023Q3)
+                D_2008Q4, D_2009Q2,D_SHOCK_1992,D_COVID_2020,D_2021Q2,D_2023Q3,D_COVID_2021,D_ENERGY_2023)
 
 #Ensuring date format
 full_data$date <- as.yearqtr(full_data$date)
@@ -184,20 +186,20 @@ outlierTest(cg_adl)  # Bonferroni p-values for outliers
 # Identification of breakpoints
 cg_bp <- breakpoints(core_gds_qoq ~0+cg_L1 +energy_qoq+ eer_qoq + 
                        pmdef_qoq + pmdef_L2 + 
-                       D_GFC_2009 +D_COVID_2021 +D_ENERGY_2023,
+                       D_2009Q2 +D_COVID_2021 +D_ENERGY_2023,
                      data = full_sample)
 summary(cg_bp)
 plot(cg_bp)
 
 breakpoints(core_gds_qoq ~ 0+ cg_L1 + energy_qoq+eer_qoq +
               pmdef_qoq + pmdef_L2 + 
-              D_GFC_2009 +D_COVID_2021+ D_ENERGY_2023,
+              D_2009Q2 +D_COVID_2021+ D_ENERGY_2023,
             data = full_sample, breaks = 5)
 
 # stability test
 sctest(core_gds_qoq ~ 0+ cg_L1 + energy_qoq+eer_qoq + 
          pmdef_qoq + pmdef_L2 + 
-         D_GFC_2009 +D_COVID_2021+D_ENERGY_2023,
+         D_2009Q2 +D_COVID_2021+D_ENERGY_2023,
        data = full_sample, type = "supF")
 
 # Residual test
@@ -475,7 +477,7 @@ train<- subset(full_data,
 
 
 cg_adl19 <- lm(core_gds_qoq ~ 0 + cg_L1  + energy_qoq+eer_qoq + 
-                 pmdef_qoq + pmdef_L2+ D_GFC_2009,
+                 pmdef_qoq + pmdef_L2+ D_2009Q2,
              data=train)
 
 summary (cg_adl19)
@@ -726,7 +728,7 @@ print(ac_cg_ar19, n = Inf)
 # 2) MODEL FORMULA (your pre-2020 spec)
 #----------------------------------------------------------
 model_formula <- core_gds_qoq ~ 0 + cg_L1 + energy_qoq + eer_qoq + 
-  pmdef_qoq + pmdef_L2+ D_GFC_2009
+  pmdef_qoq + pmdef_L2+ D_2009Q2
 
 #----------------------------------------------------------
 # 3) HELPERS (stable binding + dynamic-lag regressor builder)
@@ -934,6 +936,8 @@ df_outturn <- df_outturn %>%
 # saving data in parquet format
 library(arrow)
 
-write_parquet(df_outturn, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/outturn_datacg.parquet")
-write_parquet(forecast_data, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/forecast_datacg.parquet")
+# Ensure local data directory exists
+dir.create("C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data", recursive = TRUE, showWarnings = FALSE)
+write_parquet(df_outturn, "C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data/outturn_datacg.parquet")
+write_parquet(forecast_data, "C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data/forecast_datacg.parquet")
 

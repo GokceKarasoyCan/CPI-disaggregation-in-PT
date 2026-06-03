@@ -3,8 +3,12 @@ library(readxl)
 library(tibble)
 library(dplyr)
 library(tidyr)
+# Suppress the known xts warning about dplyr::lag masking in interactive sessions.
+options(xts.warn_dplyr_breaks_lag = FALSE)
 library(quantmod)
 library(ggplot2)
+
+cat("Starting fcst_cpi_components.R...\n")
 
 ## --------------------------------------------------
 #  1. DATA PREPARATION 
@@ -14,7 +18,7 @@ library(ggplot2)
 
 # Importing raw data 1990Q2-2025Q4
 cpi_tbl <- 
-  readxl::read_excel("N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/Models/data/data_set_v3.xlsx",
+  readxl::read_excel("C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data_set_v3.xlsx",
                      sheet = "Estimation_data",
                      range = "A11:L154")
 
@@ -89,7 +93,7 @@ full_data <-
 
 # Importing wider forecast for inflation and activity 1996Q1-2029Q2
 df_fcst <- 
-  readxl::read_excel("N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/Models/data/data_set_v3.xlsx",
+  readxl::read_excel("C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data_set_v3.xlsx",
                      sheet = "M26_Baseline",
                      range = "A11:V145")
 
@@ -248,10 +252,10 @@ mpr_fcst <-
   
   #Including lagged data to match with CECD constrains period
   mutate(
-    ie_L1    = lag(infl_exp_f, 1),     # 1‑lag of inflation expectations
-    ie_L3    = lag(infl_exp_f, 3),     # 3‑lag of inflation expectations
-    pmdef_L2 = lag(pmdef_f_qoq, 2),   # 2‑lag of pmdef_qoq
-    e_L4     = lag(energy_f_qoq, 4),  # 4‑lag of energy_qoq
+    ie_L1    = dplyr::lag(infl_exp_f, 1),     # 1‑lag of inflation expectations
+    ie_L3    = dplyr::lag(infl_exp_f, 3),     # 3‑lag of inflation expectations
+    pmdef_L2 = dplyr::lag(pmdef_f_qoq, 2),   # 2‑lag of pmdef_qoq
+    e_L4     = dplyr::lag(energy_f_qoq, 4),  # 4‑lag of energy_qoq
   ) %>%
   filter(
     date >= as.yearqtr("2026 Q4"), date <= as.yearqtr("2029 Q2")) # here you can change forecast horizon
@@ -415,7 +419,7 @@ fc_level <- bind_rows(fcst_level, fcst_qoq) %>%
   arrange(date)
 
 # --- 4. Rebuild levels iteratively (correct recursive approach) ---
-for (i in 1:nrow(fc_level)) {
+for (i in seq_len(nrow(fc_level))) {
   
   if (is.na(fc_level$food_at[i])) {
     fc_level$food_at[i] <- fc_level$food_at[i-1] * (1 + fc_level$food_at_qoq_fc[i]/100)
@@ -441,11 +445,11 @@ fc_level <- fc_level %>%
 # --- 5. Compute YoY inflation (log-diff) ---
 fc_yoy <- fc_level %>%
   mutate(
-    food_at_yoy  = 100 * (log(food_at)  - log(lag(food_at, 4))),
-    services_yoy = 100 * (log(services) - log(lag(services, 4))),
-    core_gds_yoy = 100 * (log(core_gds) - log(lag(core_gds, 4))),
-    energy_yoy = 100 * (log(energy_f) - log(lag(energy_f, 4))),
-    MPR_cpi = 100 * (log(cpi_f) - log(lag(cpi_f, 4))),
+    food_at_yoy  = 100 * (log(food_at)  - log(dplyr::lag(food_at, 4))),
+    services_yoy = 100 * (log(services) - log(dplyr::lag(services, 4))),
+    core_gds_yoy = 100 * (log(core_gds) - log(dplyr::lag(core_gds, 4))),
+    energy_yoy = 100 * (log(energy_f) - log(dplyr::lag(energy_f, 4))),
+    MPR_cpi = 100 * (log(cpi_f) - log(dplyr::lag(cpi_f, 4))),
   )
 
 #------------------------------------------------
@@ -516,7 +520,7 @@ fc_yoy <- fc_yoy %>%
 #------------------------------------------------
 
 # Reshape to long format for the three components
-fc_yoy %>%
+plot_components <- fc_yoy %>%
   select( date, MPR_cpi,
           services_yoy, core_gds_yoy, food_at_yoy)%>% #cpi_bottom_up,
   pivot_longer(-date, names_to = "series", values_to = "value") %>%
@@ -538,7 +542,9 @@ fc_yoy %>%
   ) +
   
   labs(x = NULL, y = "Percentage change (yoy)", colour = NULL) +
-  theme_boe_identity()
+  theme_minimal(base_family = "sans")
+
+ggsave("cpi_components_yoy.png", plot_components, width = 10, height = 5, dpi = 300)
 
 #------------------------------------------------
 # PLOTTING AGGREGATED CPI AND COMPASS CPI
@@ -546,7 +552,7 @@ fc_yoy %>%
 
 #Plotting the comparison of headline CPI and estimated CPI
 
-fc_yoy %>%
+plot_aggregate <- fc_yoy %>%
   select(date, MPR_cpi,cpi_bottom_up,cpi_resid)%>%
   pivot_longer(-date, names_to = "series", values_to = "value") %>%
   mutate(series = factor(series,
@@ -555,7 +561,9 @@ fc_yoy %>%
   ggplot(aes(x = date, y = value, colour = series)) +
   geom_line(linewidth = 0.8) +
   labs(x = NULL, y = "Percentage change (yoy)", colour = NULL) +
-  theme_boe_identity()
+  theme_minimal(base_family = "sans")
+
+ggsave("cpi_aggregate_vs_bottomup.png", plot_aggregate, width = 10, height = 5, dpi = 300)
 
 #------------------------------------------------
 # PLOTTING FORECAST OF CPI COMPONENTS by CONTRIBUTION
@@ -614,7 +622,7 @@ component_labs <- c(
 #   - Bottom legend
 #   - Bank blue text
 #--------------------------------------------------
-theme_boe <- function(base_size = 12, base_family = "Calibri") {
+theme_boe <- function(base_size = 12, base_family = "sans") {
   theme_minimal(base_size = base_size, base_family = base_family) +
     theme(
       plot.title.position = "plot",
@@ -696,6 +704,16 @@ p <- ggplot(fc_long, aes(x = date_plot)) +
   
   theme_boe(base_size = 12)
 
-print(p)
+ggsave("cpi_contributions_stacked.png", p, width = 11, height = 6, dpi = 300)
+
+if (interactive()) {
+  print(p)
+}
+
+cat("Finished fcst_cpi_components.R\n")
+cat("Generated files:\n")
+cat(" - cpi_components_yoy.png\n")
+cat(" - cpi_aggregate_vs_bottomup.png\n")
+cat(" - cpi_contributions_stacked.png\n")
 
 

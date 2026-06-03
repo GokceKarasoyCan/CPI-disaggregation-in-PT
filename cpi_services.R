@@ -1003,6 +1003,12 @@ df_outturn <- df_outturn %>%
 # saving data in parquet format
 library(arrow)
 
-write_parquet(df_outturn, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/outturn_data_s.parquet")
-write_parquet(forecast_data, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/forecast_data_s.parquet")
+#write_parquet(df_outturn, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/outturn_data_s.parquet")
+#write_parquet(forecast_data, "N:/MPOD/Infrastructure Investment/02_Team_members/Carlos/3. CPI disaggregation in PT/github_project/CPI_disagg/data/forecast_data_s.parquet")
+# saving data in parquet format
+library(arrow)
+
+#dir.create("C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data", recursive = TRUE, showWarnings = FALSE)
+write_parquet(df_outturn, "C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data/outturn_datacg.parquet")
+write_parquet(forecast_data, "C:/Users/344792/Gokce/GIT PROJECTS/DisaggCPI/CPI-disaggregation-in-PT/data/forecast_datacg.parquet")
 
