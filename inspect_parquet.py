@@ -3,7 +3,7 @@ import pandas as pd
 
 # Project folders
 PROJECT_ROOT = Path(r"C:\Users\344792\Gokce\GIT PROJECTS\DisaggCPI\CPI-disaggregation-in-PT")
-FAME_EXPORTS_DIR = PROJECT_ROOT / "data" / "fame_exports"
+FAME_EXPORTS_DIR = PROJECT_ROOT / "data"
 RAW_DIR = FAME_EXPORTS_DIR / "raw"
 
 

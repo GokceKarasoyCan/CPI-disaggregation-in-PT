@@ -1,8 +1,10 @@
 library(dplyr)
-library(ggplot2)
+library(readxl)
 library(tidyr)
 library(zoo)
-library(boeCharts)
+library(quantmod)
+library(purrr)
+library(tibble)
 
 cat("Starting 03_forecasting.R...\n")
 
@@ -16,74 +18,93 @@ get_project_root <- function() {
   normalizePath(getwd())
 }
 
-project_root <- get_project_root()
-output_dir <- file.path(project_root, "outputs")
+assert_required_cols <- function(df, required_cols, label) {
+  missing_cols <- setdiff(required_cols, names(df))
+  if (length(missing_cols) > 0) {
+    stop(sprintf(
+      "%s is missing required columns: %s",
+      label,
+      paste(missing_cols, collapse = ", ")
+    ))
+  }
+}
 
-df_fcst_growth <- readRDS(file.path(output_dir, "fcst_growth.rds"))
-df_fcst_level <- readRDS(file.path(output_dir, "fcst_level.rds"))
-df_fcst <- readRDS(file.path(output_dir, "fcst_raw.rds"))
-b_s <- readRDS(file.path(output_dir, "b_services.rds"))
-b_cg <- readRDS(file.path(output_dir, "b_core_goods.rds"))
-b_lr <- readRDS(file.path(output_dir, "b_food_lr.rds"))
-b_ecm <- readRDS(file.path(output_dir, "b_food_ecm.rds"))
-df_plus_nearcast <- readRDS(file.path(output_dir, "last_state.rds"))
+safe_numeric <- function(x) {
+  suppressWarnings(as.numeric(gsub(",", ".", as.character(x), fixed = TRUE)))
+}
 
-## --------------------------------------------------
-#  1. FORECASTING
-## --------------------------------------------------
+coef_or_zero <- function(beta, name) {
+  if (!(name %in% names(beta))) {
+    return(0)
+  }
+  val <- beta[[name]]
+  if (is.na(val)) {
+    return(0)
+  }
+  as.numeric(val)
+}
 
-ECM_data <- df_plus_nearcast %>%
-  dplyr::select(date, ln_pmdef_f, ln_food_at, ln_eer_f) %>%
-  mutate(ln_pmdef = ln_pmdef_f, ln_eer = ln_eer_f)
-
-fc_start <- as.yearqtr("2026 Q1")
-fc_end <- as.yearqtr("2026 Q3")
-
-idx_fc <- with(ECM_data,
-               date >= fc_start & date <= fc_end)
-
-yhat_fc <- with(ECM_data[idx_fc, ],
-                b_lr["(Intercept)"] +
-                  b_lr["ln_eer"] * ln_eer +
-                  b_lr["ln_pmdef"] * ln_pmdef)
-
-y_fc <- ECM_data$ln_food_at[idx_fc]
-resid_fc <- y_fc - yhat_fc
-
-df_plus_nearcast$ECT_food[idx_fc] <- resid_fc
-df_plus_nearcast$ECT_food_L1 <- dplyr::lag(df_plus_nearcast$ECT_food, 1)
-
-mpr_fcst <-
-  df_fcst_growth %>%
-  dplyr::select(date, infl_exp_f, eer_f_qoq, energy_f_qoq,
-                pmdef_f_qoq, cpi_f_qoq, ln_pmdef_f, ln_eer_f) %>%
-  arrange(date) %>%
-  mutate(
-    ie_L1 = dplyr::lag(infl_exp_f, 1),
-    ie_L3 = dplyr::lag(infl_exp_f, 3),
-    pmdef_L2 = dplyr::lag(pmdef_f_qoq, 2),
-    e_L4 = dplyr::lag(energy_f_qoq, 4)
-  ) %>%
-  filter(
-    date >= as.yearqtr("2026 Q4"), date <= as.yearqtr("2029 Q2")
+# --------------------------------------------------
+# Build level + growth data for one vintage sheet
+# --------------------------------------------------
+build_vintage_growth <- function(df_raw) {
+  assert_required_cols(
+    df_raw,
+    c(
+      "date", "stif_cpi", "core_gds", "services", "food_at",
+      "energy_f", "pmdef_f", "eer_f", "infl_exp_f", "cpi_f",
+      "cg_wgt", "e_wgt", "s_wgt", "f_wgt", "encont_f"
+    ),
+    "Vintage sheet"
   )
 
-forecast_services <- function(b_s, df_plus_nearcast, mpr_fcst) {
-  last_serv <- tail(df_plus_nearcast$services_qoq, 1)
+  df_lvl <- df_raw %>%
+    mutate(
+      date = as.yearqtr(date),
+      pmdef_f = pmdef_f * 100
+    ) %>%
+    dplyr::select(
+      date,
+      stif_cpi, core_gds, services, food_at,
+      energy_f, pmdef_f, eer_f, infl_exp_f, cpi_f,
+      cg_wgt, e_wgt, s_wgt, f_wgt, encont_f
+    ) %>%
+    arrange(date)
+
+  df_g <- df_lvl %>%
+    mutate(across(
+      c(food_at, pmdef_f, eer_f),
+      ~ log(as.numeric(.)),
+      .names = "ln_{.col}"
+    )) %>%
+    mutate(across(
+      c(stif_cpi, core_gds, services, food_at, energy_f, pmdef_f, eer_f, cpi_f),
+      ~ as.numeric(Delt(., type = "log")) * 100,
+      .names = "{.col}_qoq"
+    )) %>%
+    mutate(across(
+      c(stif_cpi, core_gds, services, food_at, energy_f, pmdef_f, eer_f, cpi_f),
+      ~ as.numeric(Delt(., k = 4, type = "log")) * 100,
+      .names = "{.col}_yoy"
+    ))
+
+  list(level = df_lvl, growth = df_g)
+}
+
+# --------------------------------------------------
+# Recursive forecast: services
+# --------------------------------------------------
+forecast_services <- function(b_s, state_df, mpr_fcst) {
+  last_serv <- tail(state_df$services_qoq, 1)
   nT <- nrow(mpr_fcst)
   serv_fc <- numeric(nT)
 
   for (t in seq_len(nT)) {
-    x_serv_lag <- last_serv
-    x_infl_exp_f <- mpr_fcst$infl_exp_f[t]
-    x_eer_f_qoq <- mpr_fcst$eer_f_qoq[t]
-    x_pmdef_f_qoq <- mpr_fcst$pmdef_f_qoq[t]
-
-    y_hat <- b_s["(Intercept)"] +
-      b_s["lag(services_qoq, 1)"] * x_serv_lag +
-      b_s["infl_exp"] * x_infl_exp_f +
-      b_s["eer_qoq"] * x_eer_f_qoq +
-      b_s["pmdef_qoq"] * x_pmdef_f_qoq
+    y_hat <- coef_or_zero(b_s, "(Intercept)") +
+      coef_or_zero(b_s, "lag(services_qoq, 1)") * last_serv +
+      coef_or_zero(b_s, "infl_exp") * mpr_fcst$infl_exp_f[t] +
+      coef_or_zero(b_s, "eer_qoq") * mpr_fcst$eer_f_qoq[t] +
+      coef_or_zero(b_s, "pmdef_qoq") * mpr_fcst$pmdef_f_qoq[t]
 
     serv_fc[t] <- y_hat
     last_serv <- y_hat
@@ -93,20 +114,19 @@ forecast_services <- function(b_s, df_plus_nearcast, mpr_fcst) {
   mpr_fcst
 }
 
-forecast_core_goods <- function(b_cg, df_plus_nearcast, mpr_fcst) {
-  last_cg <- tail(df_plus_nearcast$core_gds_qoq, 1)
+# --------------------------------------------------
+# Recursive forecast: core goods
+# --------------------------------------------------
+forecast_core_goods <- function(b_cg, state_df, mpr_fcst) {
+  last_cg <- tail(state_df$core_gds_qoq, 1)
   nT <- nrow(mpr_fcst)
   cg_fc <- numeric(nT)
 
   for (t in seq_len(nT)) {
-    x_cg_L1 <- last_cg
-    x_eer_f_qoq <- mpr_fcst$eer_f_qoq[t]
-    x_pmdef_L2 <- mpr_fcst$pmdef_L2[t]
-
     y_hat <-
-      b_cg["lag(core_gds_qoq, 1)"] * x_cg_L1 +
-      b_cg["eer_qoq"] * x_eer_f_qoq +
-      b_cg["lag(pmdef_qoq, 2)"] * x_pmdef_L2
+      coef_or_zero(b_cg, "lag(core_gds_qoq, 1)") * last_cg +
+      coef_or_zero(b_cg, "eer_qoq") * mpr_fcst$eer_f_qoq[t] +
+      coef_or_zero(b_cg, "lag(pmdef_qoq, 2)") * mpr_fcst$pmdef_L2[t]
 
     cg_fc[t] <- y_hat
     last_cg <- y_hat
@@ -116,48 +136,46 @@ forecast_core_goods <- function(b_cg, df_plus_nearcast, mpr_fcst) {
   mpr_fcst
 }
 
-forecast_food <- function(b_lr, b_ecm, df_plus_nearcast, mpr_fcst) {
-  last_food_level <- tail(df_plus_nearcast$food_at, 1)
-  last_ECT <- tail(df_plus_nearcast$ECT_food, 1)
-  food_lag_buffer <- tail(df_plus_nearcast$food_at_qoq, 4)
+# --------------------------------------------------
+# Recursive forecast: food ECM
+# --------------------------------------------------
+forecast_food <- function(b_lr, b_ecm, state_df, mpr_fcst) {
+  last_food_level <- tail(state_df$food_at, 1)
+  last_ECT <- tail(state_df$ECT_food, 1)
+  food_lag_buffer <- tail(state_df$food_at_qoq, 4)
 
   nT <- nrow(mpr_fcst)
   food_qoq_fc <- numeric(nT)
   food_level_fc <- numeric(nT)
 
   for (t in seq_len(nT)) {
-    x_f_L2 <- food_lag_buffer[3]
-    x_f_L4 <- food_lag_buffer[1]
-    x_e_L4 <- mpr_fcst$e_L4[t]
-    x_ie_L1 <- mpr_fcst$ie_L1[t]
-    x_pmdef_qoq <- mpr_fcst$pmdef_f_qoq[t]
-    x_pmdef_L2 <- mpr_fcst$pmdef_L2[t]
-    x_ECT_L1 <- last_ECT
+    x_f_L2 <- food_lag_buffer[3]   # t-2
+    x_f_L4 <- food_lag_buffer[1]   # t-4
 
     y_hat_qoq <-
-      b_ecm["lag(food_at_qoq, 2)"] * x_f_L2 +
-      b_ecm["lag(food_at_qoq, 4)"] * x_f_L4 +
-      b_ecm["lag(energy_qoq, 4)"] * x_e_L4 +
-      b_ecm["lag(infl_exp, 1)"] * x_ie_L1 +
-      b_ecm["pmdef_qoq"] * x_pmdef_qoq +
-      b_ecm["lag(pmdef_qoq, 2)"] * x_pmdef_L2 +
-      b_ecm["ECT_food_L1"] * x_ECT_L1
+      coef_or_zero(b_ecm, "lag(food_at_qoq, 2)") * x_f_L2 +
+      coef_or_zero(b_ecm, "lag(food_at_qoq, 4)") * x_f_L4 +
+      coef_or_zero(b_ecm, "lag(energy_qoq, 4)") * mpr_fcst$e_L4[t] +
+      coef_or_zero(b_ecm, "lag(infl_exp, 1)") * mpr_fcst$ie_L1[t] +
+      coef_or_zero(b_ecm, "pmdef_qoq") * mpr_fcst$pmdef_f_qoq[t] +
+      coef_or_zero(b_ecm, "lag(pmdef_qoq, 2)") * mpr_fcst$pmdef_L2[t] +
+      coef_or_zero(b_ecm, "ECT_food_L1") * last_ECT
 
     food_qoq_fc[t] <- y_hat_qoq
 
+    # Rebuild level from QoQ forecast
     new_food_level <- last_food_level * (1 + y_hat_qoq / 100)
     food_level_fc[t] <- new_food_level
-
-    ln_pmdef_t <- mpr_fcst$ln_pmdef_f[t]
-    ln_eer_t <- mpr_fcst$ln_eer_f[t]
     ln_food_t <- log(new_food_level)
 
+    # Update ECT using long-run relation
     ECT_t <- ln_food_t - (
-      b_lr["(Intercept)"] +
-        b_lr["ln_pmdef"] * ln_pmdef_t +
-        b_lr["ln_eer"] * ln_eer_t
+      coef_or_zero(b_lr, "(Intercept)") +
+        coef_or_zero(b_lr, "ln_pmdef") * mpr_fcst$ln_pmdef_f[t] +
+        coef_or_zero(b_lr, "ln_eer") * mpr_fcst$ln_eer_f[t]
     )
 
+    # Roll forward state
     last_food_level <- new_food_level
     last_ECT <- ECT_t
     food_lag_buffer <- c(food_lag_buffer[-1], y_hat_qoq)
@@ -165,234 +183,276 @@ forecast_food <- function(b_lr, b_ecm, df_plus_nearcast, mpr_fcst) {
 
   mpr_fcst$food_at_qoq_fc <- food_qoq_fc
   mpr_fcst$food_at_level_fc <- food_level_fc
-
   mpr_fcst
 }
 
-mpr_fcst_full <- mpr_fcst %>%
-  forecast_services(b_s, df_plus_nearcast, .) %>%
-  forecast_core_goods(b_cg, df_plus_nearcast, .) %>%
-  forecast_food(b_lr, b_ecm, df_plus_nearcast, .)
+# --------------------------------------------------
+# Run one vintage
+# --------------------------------------------------
+run_oos_for_vintage <- function(sheet_name, start_qtr, end_qtr, workbook_path, b_s, b_cg, b_lr, b_ecm) {
+  raw_v <- readxl::read_excel(
+    workbook_path,
+    sheet = sheet_name,
+    range = "A11:V145"
+  ) %>%
+    mutate(across(-date, safe_numeric))
 
-## --------------------------------------------------
-#  2. RECONSTRUCT LEVELS, AGGREGATE, AND PLOT
-## --------------------------------------------------
+  v_list <- build_vintage_growth(raw_v)
+  df_lvl <- v_list$level
 
-fcst_level <- df_plus_nearcast %>%
-  filter(date >= "1996 Q2", date <= "2026 Q3") %>%
-  dplyr::select(date, food_at, services, core_gds)
-
-fcst_qoq <- mpr_fcst_full %>%
-  dplyr::select(date,
-                food_at_qoq_fc,
-                services_qoq_fc,
-                core_gds_qoq_fc)
-
-fc_level <- bind_rows(fcst_level, fcst_qoq) %>%
-  arrange(date)
-
-for (i in seq_len(nrow(fc_level))) {
-  if (is.na(fc_level$food_at[i])) {
-    fc_level$food_at[i] <- fc_level$food_at[i - 1] * (1 + fc_level$food_at_qoq_fc[i] / 100)
-  }
-
-  if (is.na(fc_level$services[i])) {
-    fc_level$services[i] <- fc_level$services[i - 1] * (1 + fc_level$services_qoq_fc[i] / 100)
-  }
-
-  if (is.na(fc_level$core_gds[i])) {
-    fc_level$core_gds[i] <- fc_level$core_gds[i - 1] * (1 + fc_level$core_gds_qoq_fc[i] / 100)
-  }
-}
-
-fc_level <- fc_level %>%
-  left_join(
-    df_fcst_level %>%
-      dplyr::select(date, cpi_f, energy_f),
-    by = "date"
-  )
-
-fc_yoy <- fc_level %>%
-  mutate(
-    food_at_yoy = 100 * (log(food_at) - log(dplyr::lag(food_at, 4))),
-    services_yoy = 100 * (log(services) - log(dplyr::lag(services, 4))),
-    core_gds_yoy = 100 * (log(core_gds) - log(dplyr::lag(core_gds, 4))),
-    energy_yoy = 100 * (log(energy_f) - log(dplyr::lag(energy_f, 4))),
-    MPR_cpi = 100 * (log(cpi_f) - log(dplyr::lag(cpi_f, 4)))
-  )
-
-fc_yoy <- fc_yoy %>%
-  left_join(
-    df_fcst %>%
-      dplyr::select(date, s_wgt, f_wgt, e_wgt, cg_wgt, encont_f),
-    by = "date"
-  )
-
-fc_yoy <- fc_yoy %>%
-  mutate(
-    c_f = f_wgt * food_at_yoy / 1000,
-    c_s = s_wgt * services_yoy / 1000,
-    c_e = e_wgt * energy_yoy / 1000,
-    c_cg = cg_wgt * core_gds_yoy / 1000
-  )
-
-fc_yoy$cpi_bottom_up <- with(fc_yoy, c_f + encont_f + c_s + c_cg)
-fc_yoy$cpi_resid <- with(fc_yoy, MPR_cpi - cpi_bottom_up)
-fc_yoy$c_cg_r <- with(fc_yoy, MPR_cpi - c_f - encont_f - c_s)
-
-boe_dark_blue <- "#12273F"
-boe_aqua <- "#3CD7D9"
-boe_stone <- "#C4C9CF"
-boe_orange <- "#FF7300"
-boe_purple <- "#9E71FE"
-boe_gold <- "#D4AF37"
-
-fc_yoy <- fc_yoy %>%
-  filter(
-    date >= as.yearqtr("2025 Q1"),
-    date <= as.yearqtr("2029 Q2")
-  )
-
-plot_components <- fc_yoy %>%
-  dplyr::select(date, MPR_cpi,
-                services_yoy, core_gds_yoy, food_at_yoy) %>%
-  pivot_longer(-date, names_to = "series", values_to = "value") %>%
-  tidyr::drop_na(value) %>%
-  mutate(series = factor(series,
-                         levels = c("MPR_cpi", "services_yoy", "core_gds_yoy", "food_at_yoy"),
-                         labels = c("MPR CPI (Baseline)", "Services", "Core goods", "Food"))) %>%
-  ggplot(aes(x = date, y = value, colour = series)) +
-  geom_line(linewidth = 0.9, na.rm = TRUE) +
-  geom_vline(xintercept = as.numeric(as.yearqtr("2026 Q1")),
-             linetype = "dashed", colour = "grey40") +
-  scale_colour_manual(
-    values = c(
-      "MPR CPI (Baseline)" = boe_orange,
-      "Services" = boe_purple,
-      "Core goods" = boe_gold,
-      "Food" = boe_aqua
+  df_g <- v_list$growth %>%
+    filter(!is.na(date)) %>%
+    arrange(date) %>%
+    mutate(
+      ECT_food = ln_food_at - (
+        coef_or_zero(b_lr, "(Intercept)") +
+          coef_or_zero(b_lr, "ln_pmdef") * ln_pmdef_f +
+          coef_or_zero(b_lr, "ln_eer") * ln_eer_f
+      ),
+      ECT_food_L1 = dplyr::lag(ECT_food, 1)
     )
-  ) +
-  labs(x = NULL, y = "Percentage change (yoy)", colour = NULL) +
-  theme_minimal(base_family = "sans")
 
-ggsave(file.path(project_root, "cpi_components_yoy.png"), plot_components, width = 10, height = 5, dpi = 300)
+  # ----------------------------------------------
+  # 1. State before forecast start
+  # ----------------------------------------------
+  state_df <- df_g %>%
+    filter(date < start_qtr) %>%
+    filter(
+      !is.na(services_qoq),
+      !is.na(core_gds_qoq),
+      !is.na(food_at_qoq),
+      !is.na(food_at),
+      !is.na(ECT_food)
+    )
 
-plot_aggregate <- fc_yoy %>%
-  dplyr::select(date, MPR_cpi, cpi_bottom_up, cpi_resid) %>%
-  pivot_longer(-date, names_to = "series", values_to = "value") %>%
-  tidyr::drop_na(value) %>%
-  mutate(series = factor(series,
-                         levels = c("MPR_cpi", "cpi_bottom_up", "cpi_resid"),
-                         labels = c("MPR CPI (Baseline)", "CPI-Bottom up", "CPI residual"))) %>%
-  ggplot(aes(x = date, y = value, colour = series)) +
-  geom_line(linewidth = 0.8, na.rm = TRUE) +
-  labs(x = NULL, y = "Percentage change (yoy)", colour = NULL) +
-  theme_minimal(base_family = "sans")
+  # ----------------------------------------------
+  # 2. Forecast-period conditioning path
+  # ----------------------------------------------
+  mpr_fcst <- df_g %>%
+    dplyr::select(
+      date, infl_exp_f, eer_f_qoq, energy_f_qoq,
+      pmdef_f_qoq, cpi_f_qoq, ln_pmdef_f, ln_eer_f
+    ) %>%
+    arrange(date) %>%
+    mutate(
+      ie_L1    = dplyr::lag(infl_exp_f, 1),
+      pmdef_L2 = dplyr::lag(pmdef_f_qoq, 2),
+      e_L4     = dplyr::lag(energy_f_qoq, 4)
+    ) %>%
+    filter(date >= start_qtr & date <= end_qtr)
 
-ggsave(file.path(project_root, "cpi_aggregate_vs_bottomup.png"), plot_aggregate, width = 10, height = 5, dpi = 300)
+  if (nrow(mpr_fcst) != 13) {
+    stop(sprintf(
+      "Sheet %s does not contain exactly 13 quarters in [%s, %s].",
+      sheet_name, as.character(start_qtr), as.character(end_qtr)
+    ))
+  }
 
-fc_yoy_fc <- fc_yoy %>%
-  filter(
-    date >= as.yearqtr("2025 Q1"),
-    date <= as.yearqtr("2029 Q2")
-  )
+  if (nrow(state_df) < 8) {
+    stop(sprintf(
+      "Sheet %s does not have enough pre-forecast history to seed lags.",
+      sheet_name
+    ))
+  }
 
-fc_long <- fc_yoy_fc %>%
-  mutate(date_plot = as.Date(date)) %>%
-  dplyr::select(
-    date, date_plot,
-    c_f, encont_f, c_s, c_cg_r, MPR_cpi
-  ) %>%
-  pivot_longer(
-    cols = c(c_f, encont_f, c_s, c_cg_r),
-    names_to = "component",
-    values_to = "contribution"
-  ) %>%
-  tidyr::drop_na(contribution)
+  if (any(is.na(mpr_fcst$infl_exp_f)) ||
+      any(is.na(mpr_fcst$eer_f_qoq)) ||
+      any(is.na(mpr_fcst$pmdef_f_qoq))) {
+    stop(sprintf(
+      "Sheet %s has missing conditioning variables in the forecast window.",
+      sheet_name
+    ))
+  }
 
-headline_line <- fc_yoy_fc %>%
-  mutate(date_plot = as.Date(date)) %>%
-  dplyr::select(date_plot, MPR_cpi) %>%
-  tidyr::drop_na(MPR_cpi)
+  # ----------------------------------------------
+  # 3. Recursive QoQ forecasts
+  # ----------------------------------------------
+  mpr_fcst_full <- mpr_fcst %>%
+    forecast_services(b_s, state_df, .) %>%
+    forecast_core_goods(b_cg, state_df, .) %>%
+    forecast_food(b_lr, b_ecm, state_df, .)
 
-bank_cols <- c(
-  c_f = boe_aqua,
-  encont_f = boe_orange,
-  c_s = boe_purple,
-  c_cg_r = boe_gold
-)
+  # ----------------------------------------------
+  # 4. Rebuild component levels
+  # ----------------------------------------------
+  fcst_level <- df_lvl %>%
+    filter(date < start_qtr) %>%
+    dplyr::select(date, food_at, services, core_gds)
 
-component_labs <- c(
-  c_f = "Food",
-  encont_f = "Energy",
-  c_s = "Services",
-  c_cg_r = "Core goods"
-)
+  fcst_qoq <- mpr_fcst_full %>%
+    dplyr::select(
+      date,
+      food_at_qoq_fc,
+      services_qoq_fc,
+      core_gds_qoq_fc
+    )
 
-theme_boe <- function(base_size = 12, base_family = "sans") {
-  theme_minimal(base_size = base_size, base_family = base_family) +
-    theme(
-      plot.title.position = "plot",
-      plot.caption.position = "plot",
-      text = element_text(colour = boe_dark_blue),
-      plot.title = element_text(face = "bold", size = base_size + 2),
-      plot.subtitle = element_text(size = base_size),
-      plot.caption = element_text(size = base_size - 3, hjust = 0),
-      panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank(),
-      panel.grid.major.y = element_line(colour = alpha(boe_stone, 0.55), linewidth = 0.4),
-      axis.title = element_text(colour = boe_dark_blue),
-      axis.text = element_text(colour = boe_dark_blue),
-      axis.ticks = element_line(colour = alpha(boe_dark_blue, 0.35)),
-      legend.position = "bottom",
-      legend.title = element_blank(),
-      legend.text = element_text(size = base_size - 1),
-      legend.key = element_rect(fill = "white", colour = NA),
-      plot.margin = margin(10, 12, 8, 10)
+  fc_level <- bind_rows(fcst_level, fcst_qoq) %>%
+    arrange(date)
+
+  if (nrow(fc_level) >= 2) {
+    for (i in 2:nrow(fc_level)) {
+      if (is.na(fc_level$food_at[i]) && !is.na(fc_level$food_at_qoq_fc[i])) {
+        fc_level$food_at[i] <- fc_level$food_at[i - 1] * (1 + fc_level$food_at_qoq_fc[i] / 100)
+      }
+
+      if (is.na(fc_level$services[i]) && !is.na(fc_level$services_qoq_fc[i])) {
+        fc_level$services[i] <- fc_level$services[i - 1] * (1 + fc_level$services_qoq_fc[i] / 100)
+      }
+
+      if (is.na(fc_level$core_gds[i]) && !is.na(fc_level$core_gds_qoq_fc[i])) {
+        fc_level$core_gds[i] <- fc_level$core_gds[i - 1] * (1 + fc_level$core_gds_qoq_fc[i] / 100)
+      }
+    }
+  }
+
+  # ----------------------------------------------
+  # 5. Add vintage headline / energy / weights
+  # ----------------------------------------------
+  fc_level <- fc_level %>%
+    left_join(
+      df_lvl %>%
+        dplyr::select(date, cpi_f, energy_f, cg_wgt, e_wgt, s_wgt, f_wgt, encont_f),
+      by = "date"
+    )
+
+  # ----------------------------------------------
+  # 6. Convert levels to YoY
+  # ----------------------------------------------
+  fc_yoy <- fc_level %>%
+    mutate(
+      food_at_yoy  = 100 * (log(food_at)  - log(dplyr::lag(food_at, 4))),
+      services_yoy = 100 * (log(services) - log(dplyr::lag(services, 4))),
+      core_gds_yoy = 100 * (log(core_gds) - log(dplyr::lag(core_gds, 4))),
+      energy_yoy   = 100 * (log(energy_f) - log(dplyr::lag(energy_f, 4))),
+      MPR_cpi      = 100 * (log(cpi_f)    - log(dplyr::lag(cpi_f, 4)))
+    )
+
+  # ----------------------------------------------
+  # 7. Bottom-up CPI contributions
+  # ----------------------------------------------
+  fc_yoy <- fc_yoy %>%
+    mutate(
+      c_f  = f_wgt  * food_at_yoy  / 1000,
+      c_s  = s_wgt  * services_yoy / 1000,
+      c_e  = e_wgt  * energy_yoy   / 1000,
+      c_cg = cg_wgt * core_gds_yoy / 1000
+    ) %>%
+    mutate(
+      cpi_bottom_up = c_f + encont_f + c_s + c_cg,
+      cpi_resid     = MPR_cpi - cpi_bottom_up,
+      c_cg_r        = MPR_cpi - c_f - encont_f - c_s
+    )
+
+  # Keep only forecast window in final output
+  fc_yoy <- fc_yoy %>%
+    filter(date >= start_qtr & date <= end_qtr)
+
+  # ----------------------------------------------
+  # 8. Add metadata
+  # ----------------------------------------------
+  fc_yoy %>%
+    mutate(
+      vintage_sheet    = sheet_name,
+      vintage_date     = start_qtr,
+      forecast_horizon = as.integer((date - vintage_date) * 4)
+    ) %>%
+    dplyr::select(
+      vintage_sheet, vintage_date, date, forecast_horizon,
+      food_at, services, core_gds,
+      food_at_qoq_fc, services_qoq_fc, core_gds_qoq_fc,
+      food_at_yoy, services_yoy, core_gds_yoy, energy_yoy, MPR_cpi,
+      c_f, c_s, c_e, c_cg, encont_f,
+      cpi_bottom_up, cpi_resid, c_cg_r
     )
 }
 
-p <- ggplot(fc_long, aes(x = date_plot)) +
-  geom_col(
-    aes(y = contribution, fill = component),
-    width = 85,
-    colour = NA,
-    na.rm = TRUE
-  ) +
-  geom_line(
-    data = headline_line,
-    aes(x = date_plot, y = MPR_cpi),
-    colour = boe_dark_blue,
-    linewidth = 0.9,
-    na.rm = TRUE
-  ) +
-  geom_hline(yintercept = 0, colour = alpha(boe_dark_blue, 0.6), linewidth = 0.6) +
-  scale_fill_manual(values = bank_cols, labels = component_labs) +
-  scale_x_date(
-    name = NULL,
-    date_breaks = "1 year",
-    date_labels = "%Y",
-    expand = expansion(mult = c(0.01, 0.02))
-  ) +
-  scale_y_continuous(
-    name = "Contribution to CPI (p.p.)",
-    expand = expansion(mult = c(0.05, 0.08))
-  ) +
-  labs(
-    title = "Contribution of CPI components to MPR CPI (Baseline)",
-    subtitle = "2025Q1–2029Q2"
-  ) +
-  theme_boe(base_size = 12)
+# --------------------------------------------------
+# Sheet name -> forecast start quarter
+# --------------------------------------------------
+sheet_to_start_qtr <- function(sheet_name) {
+  run_code <- substr(sheet_name, 1, 1)
+  yy <- as.integer(substr(sheet_name, 2, 3))
+  year <- 2000 + yy
 
-ggsave(file.path(project_root, "cpi_contributions_stacked.png"), p, width = 11, height = 6, dpi = 300)
+  qtr <- dplyr::case_when(
+    run_code == "F" ~ 1,
+    run_code == "M" ~ 2,
+    run_code == "A" ~ 3,
+    run_code == "N" ~ 4,
+    TRUE ~ NA_real_
+  )
 
-if (interactive()) {
-  print(p)
+  if (is.na(qtr)) {
+    stop(sprintf("Unsupported vintage sheet code in %s", sheet_name))
+  }
+
+  as.yearqtr(sprintf("%d Q%d", year, qtr))
 }
 
+# --------------------------------------------------
+# Main
+# --------------------------------------------------
+project_root <- get_project_root()
+output_dir <- file.path(project_root, "outputs")
+workbook_path <- file.path(project_root, "data_set_vintages.xlsx")
+
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
+if (!file.exists(workbook_path)) {
+  stop(sprintf("Vintage workbook not found: %s", workbook_path))
+}
+
+# Load estimated coefficients from 02_estimation.R
+b_s   <- readRDS(file.path(output_dir, "b_services.rds"))
+b_cg  <- readRDS(file.path(output_dir, "b_core_goods.rds"))
+b_lr  <- readRDS(file.path(output_dir, "b_food_lr.rds"))
+b_ecm <- readRDS(file.path(output_dir, "b_food_ecm.rds"))
+
+# Find vintage sheets
+all_sheets <- readxl::excel_sheets(workbook_path)
+vintage_sheets <- all_sheets[grepl("^[FAMN][0-9]{2}$", all_sheets)]
+
+if (length(vintage_sheets) == 0) {
+  stop("No vintage sheets found. Expected names like F24, M24, A24, N24.")
+}
+
+# Build plan
+vintage_plan <- tibble::tibble(sheet_name = vintage_sheets) %>%
+  mutate(start_qtr = purrr::map(sheet_name, sheet_to_start_qtr)) %>%
+  mutate(
+    start_qtr = as.yearqtr(unlist(start_qtr)),
+    end_qtr = start_qtr + 12/4,
+    run_order = match(substr(sheet_name, 1, 1), c("F", "M", "A", "N")),
+    year_num = as.integer(substr(sheet_name, 2, 3))
+  ) %>%
+  arrange(year_num, run_order) %>%
+  dplyr::select(sheet_name, start_qtr, end_qtr)
+
+# Run all vintages
+oos_forecasts <- purrr::pmap_dfr(
+  vintage_plan,
+  function(sheet_name, start_qtr, end_qtr) {
+    run_oos_for_vintage(
+      sheet_name = sheet_name,
+      start_qtr = start_qtr,
+      end_qtr = end_qtr,
+      workbook_path = workbook_path,
+      b_s = b_s,
+      b_cg = b_cg,
+      b_lr = b_lr,
+      b_ecm = b_ecm
+    )
+  }
+)
+
+# Save outputs
+saveRDS(vintage_plan, file.path(output_dir, "vintage_plan.rds"))
+saveRDS(oos_forecasts, file.path(output_dir, "oos_forecasts_13q.rds"))
+write.csv(oos_forecasts, file.path(output_dir, "oos_forecasts_13q.csv"), row.names = FALSE)
+
+cat("Saved out-of-sample outputs:\n")
+cat(" - outputs/vintage_plan.rds\n")
+cat(" - outputs/oos_forecasts_13q.rds\n")
+cat(" - outputs/oos_forecasts_13q.csv\n")
 cat("Finished 03_forecasting.R\n")
-cat("Generated files:\n")
-cat(" - cpi_components_yoy.png\n")
-cat(" - cpi_aggregate_vs_bottomup.png\n")
-cat(" - cpi_contributions_stacked.png\n")
