@@ -1,11 +1,11 @@
 ## --------------------------------------------------
-#  CPI component forecast pipeline runner
+#  CPI component forecast pipeline runner (V0-V3)
 ## --------------------------------------------------
 # Executes the modular workflow in order:
 #   1. 01_prepare_data.R
 #   2. 02_estimation.R
-#   3. 03_forecasting.R
-#   4. 04_generateforecastandoutturns.R
+#   3. 03versions_forecasting.R
+#   4. 04versions_generateforecastandoutturns.R
 
 get_project_root <- function() {
   args <- commandArgs(trailingOnly = FALSE)
@@ -21,11 +21,11 @@ project_root <- get_project_root()
 scripts <- c(
   "01_prepare_data.R",
   "02_estimation.R",
-  "03_forecasting.R",
-  "04_generateforecastandoutturns.R"
+  "03versions_forecasting.R",
+  "04versions_generateforecastandoutturns.R"
 )
 
-cat("Starting run_pipeline.R...\n")
+cat("Starting run_pipeline_versions.R...\n")
 
 for (script_name in scripts) {
   script_path <- file.path(project_root, script_name)
@@ -37,4 +37,4 @@ for (script_name in scripts) {
   source(script_path, chdir = TRUE)
 }
 
-cat("\nFinished run_pipeline.R\n")
+cat("\nFinished run_pipeline_versions.R\n")
